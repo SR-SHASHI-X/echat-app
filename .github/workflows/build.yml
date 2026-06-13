@@ -34,20 +34,16 @@ jobs:
           python3 << 'PYEOF'
           from PIL import Image
           import urllib.request
-
-          # Logo icons
           urllib.request.urlretrieve("https://raw.githubusercontent.com/SR-SHASHI-X/echat-app/main/logo.jpg", "logo.jpg")
           img = Image.open("logo.jpg").convert("RGBA")
           for folder, size in [("mdpi",48),("hdpi",72),("xhdpi",96),("xxhdpi",144),("xxxhdpi",192)]:
               r = img.resize((size,size), Image.LANCZOS)
               r.save(f"app/src/main/res/mipmap-{folder}/ic_launcher.png")
               r.save(f"app/src/main/res/mipmap-{folder}/ic_launcher_round.png")
-
-          # Splash screen
           urllib.request.urlretrieve("https://raw.githubusercontent.com/SR-SHASHI-X/echat-app/main/splash.png", "splash.png")
           splash = Image.open("splash.png").convert("RGB")
           splash.save("app/src/main/res/drawable/splash.jpg", "JPEG", quality=95)
-          print("All images done!")
+          print("Done!")
           PYEOF
 
           cat > settings.gradle << 'EOF'
@@ -82,8 +78,8 @@ jobs:
                   applicationId "com.echat.app"
                   minSdk 21
                   targetSdk 34
-                  versionCode 2
-                  versionName "1.1"
+                  versionCode 3
+                  versionName "1.2"
               }
               buildTypes {
                   release { minifyEnabled false; signingConfig signingConfigs.debug }
@@ -103,6 +99,8 @@ jobs:
               <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
               <uses-permission android:name="android.permission.CAMERA"/>
               <uses-permission android:name="android.permission.RECORD_AUDIO"/>
+              <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>
+              <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>
               <application
                   android:label="eChat"
                   android:icon="@mipmap/ic_launcher"
@@ -136,6 +134,16 @@ jobs:
           </resources>
           EOF
 
+          cat > app/src/main/res/layout/activity_splash.xml << 'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <ImageView xmlns:android="http://schemas.android.com/apk/res/android"
+              android:layout_width="match_parent"
+              android:layout_height="match_parent"
+              android:src="@drawable/splash"
+              android:scaleType="fitXY"
+              android:background="#000D1A"/>
+          EOF
+
           cat > app/src/main/java/com/echat/app/SplashActivity.java << 'EOF'
           package com.echat.app;
           import android.app.Activity;
@@ -155,26 +163,20 @@ jobs:
           }
           EOF
 
-          cat > app/src/main/res/layout/activity_splash.xml << 'EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <ImageView xmlns:android="http://schemas.android.com/apk/res/android"
-              android:layout_width="match_parent"
-              android:layout_height="match_parent"
-              android:src="@drawable/splash"
-              android:scaleType="fitXY"
-              android:background="#000D1A"/>
-          EOF
-
           cat > app/src/main/java/com/echat/app/MainActivity.java << 'EOF'
           package com.echat.app;
           import android.annotation.SuppressLint;
           import android.app.Activity;
+          import android.content.Intent;
           import android.graphics.Bitmap;
+          import android.net.Uri;
           import android.os.Bundle;
           import android.view.KeyEvent;
           import android.view.View;
           import android.webkit.CookieManager;
-          import android.webkit.WebResourceRequest;
+          import android.webkit.PermissionRequest;
+          import android.webkit.ValueCallback;
+          import android.webkit.WebChromeClient;
           import android.webkit.WebSettings;
           import android.webkit.WebView;
           import android.webkit.WebViewClient;
@@ -183,21 +185,20 @@ jobs:
           public class MainActivity extends Activity {
               WebView webView;
               ImageView loadingView;
+              ValueCallback<Uri[]> filePathCallback;
+              static final int FILE_CHOOSER = 100;
               @SuppressLint("SetJavaScriptEnabled")
               @Override
               protected void onCreate(Bundle savedInstanceState) {
                   super.onCreate(savedInstanceState);
                   RelativeLayout layout = new RelativeLayout(this);
-                  // Loading splash shown while page loads
                   loadingView = new ImageView(this);
                   loadingView.setImageResource(R.drawable.splash);
                   loadingView.setScaleType(ImageView.ScaleType.FIT_XY);
                   RelativeLayout.LayoutParams fullParams = new RelativeLayout.LayoutParams(
                       RelativeLayout.LayoutParams.MATCH_PARENT,
                       RelativeLayout.LayoutParams.MATCH_PARENT);
-                  // WebView
                   webView = new WebView(this);
-                  webView.setLayoutParams(fullParams);
                   webView.setVisibility(View.INVISIBLE);
                   layout.addView(webView, fullParams);
                   layout.addView(loadingView, fullParams);
@@ -229,7 +230,36 @@ jobs:
                           CookieManager.getInstance().flush();
                       }
                   });
+                  webView.setWebChromeClient(new WebChromeClient() {
+                      @Override
+                      public void onPermissionRequest(PermissionRequest request) {
+                          request.grant(request.getResources());
+                      }
+                      @Override
+                      public boolean onShowFileChooser(WebView view,
+                              ValueCallback<Uri[]> callback,
+                              FileChooserParams params) {
+                          if (filePathCallback != null) filePathCallback.onReceiveValue(null);
+                          filePathCallback = callback;
+                          Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
+                          intent.addCategory(Intent.CATEGORY_OPENABLE);
+                          intent.setType("image/*");
+                          startActivityForResult(Intent.createChooser(intent, "Choose Image"), FILE_CHOOSER);
+                          return true;
+                      }
+                  });
                   webView.loadUrl("https://echat.unaux.com");
+              }
+              @Override
+              protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+                  if (requestCode == FILE_CHOOSER && filePathCallback != null) {
+                      Uri[] results = null;
+                      if (resultCode == RESULT_OK && data != null && data.getData() != null)
+                          results = new Uri[]{data.getData()};
+                      filePathCallback.onReceiveValue(results);
+                      filePathCallback = null;
+                  }
+                  super.onActivityResult(requestCode, resultCode, data);
               }
               @Override
               public boolean onKeyDown(int k, KeyEvent e) {
