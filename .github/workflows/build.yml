@@ -12,18 +12,112 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Build WebView APK
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Create Android WebView Project
         run: |
-          wget -q https://github.com/rajashekhar9121/android-webview/archive/refs/heads/master.zip
-          unzip -q master.zip
-          cd android-webview-master
-          find . -name "*.xml" -exec sed -i 's|https://rajashekhar.in|https://echat.unaux.com|g' {} \;
-          find . -name "*.java" -exec sed -i 's|https://rajashekhar.in|https://echat.unaux.com|g' {} \;
+          mkdir -p app/src/main/java/com/echat/app
+          mkdir -p app/src/main/res/layout
+          mkdir -p app/src/main/res/values
+          mkdir -p app/src/main/res/xml
+
+          cat > settings.gradle << 'EOF'
+          pluginManagement {
+              repositories { google(); mavenCentral(); gradlePluginPortal() }
+          }
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories { google(); mavenCentral() }
+          }
+          rootProject.name = "EchatApp"
+          include ':app'
+          EOF
+
+          cat > build.gradle << 'EOF'
+          plugins {
+              id 'com.android.application' version '8.2.0' apply false
+          }
+          EOF
+
+          cat > gradle.properties << 'EOF'
+          org.gradle.jvmargs=-Xmx2048m
+          android.useAndroidX=true
+          EOF
+
+          cat > app/build.gradle << 'EOF'
+          plugins { id 'com.android.application' }
+          android {
+              namespace 'com.echat.app'
+              compileSdk 34
+              defaultConfig {
+                  applicationId "com.echat.app"
+                  minSdk 21
+                  targetSdk 34
+                  versionCode 1
+                  versionName "1.0"
+              }
+              buildTypes {
+                  release { minifyEnabled false; signingConfig signingConfigs.debug }
+              }
+              compileOptions {
+                  sourceCompatibility JavaVersion.VERSION_1_8
+                  targetCompatibility JavaVersion.VERSION_1_8
+              }
+          }
+          dependencies { implementation 'androidx.appcompat:appcompat:1.6.1' }
+          EOF
+
+          cat > app/src/main/AndroidManifest.xml << 'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <uses-permission android:name="android.permission.INTERNET"/>
+              <application android:label="eChat" android:theme="@style/Theme.AppCompat.NoActionBar" android:usesCleartextTraffic="true" android:hardwareAccelerated="true">
+                  <activity android:name=".MainActivity" android:exported="true" android:screenOrientation="portrait" android:windowSoftInputMode="adjustResize">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN"/>
+                          <category android:name="android.intent.category.LAUNCHER"/>
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
+          EOF
+
+          cat > app/src/main/java/com/echat/app/MainActivity.java << 'EOF'
+          package com.echat.app;
+          import android.app.Activity;
+          import android.os.Bundle;
+          import android.view.KeyEvent;
+          import android.webkit.WebSettings;
+          import android.webkit.WebView;
+          import android.webkit.WebViewClient;
+          public class MainActivity extends Activity {
+              WebView webView;
+              @Override
+              protected void onCreate(Bundle savedInstanceState) {
+                  super.onCreate(savedInstanceState);
+                  webView = new WebView(this);
+                  setContentView(webView);
+                  WebSettings s = webView.getSettings();
+                  s.setJavaScriptEnabled(true);
+                  s.setDomStorageEnabled(true);
+                  webView.setWebViewClient(new WebViewClient());
+                  webView.loadUrl("https://echat.unaux.com");
+              }
+              @Override
+              public boolean onKeyDown(int k, KeyEvent e) {
+                  if (k == KeyEvent.KEYCODE_BACK && webView.canGoBack()) { webView.goBack(); return true; }
+                  return super.onKeyDown(k, e);
+              }
+          }
+          EOF
+
+          gradle wrapper --gradle-version 8.4
           chmod +x gradlew
           ./gradlew assembleDebug --stacktrace
 
       - uses: actions/upload-artifact@v4
         with:
           name: eChat-APK
-          path: android-webview-master/app/build/outputs/apk/debug/app-debug.apk
+          path: app/build/outputs/apk/debug/app-debug.apk
           retention-days: 30
