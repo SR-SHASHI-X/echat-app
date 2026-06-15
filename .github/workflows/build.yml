@@ -46,7 +46,7 @@ jobs:
           print("Done!")
           PYEOF
 
-          cat > settings.gradle << 'EOF'
+          cat > settings.gradle << 'EOF2'
           pluginManagement {
               repositories { google(); mavenCentral(); gradlePluginPortal() }
           }
@@ -56,20 +56,20 @@ jobs:
           }
           rootProject.name = "EchatApp"
           include ':app'
-          EOF
+          EOF2
 
-          cat > build.gradle << 'EOF'
+          cat > build.gradle << 'EOF2'
           plugins {
               id 'com.android.application' version '8.2.0' apply false
           }
-          EOF
+          EOF2
 
-          cat > gradle.properties << 'EOF'
+          cat > gradle.properties << 'EOF2'
           org.gradle.jvmargs=-Xmx2048m
           android.useAndroidX=true
-          EOF
+          EOF2
 
-          cat > app/build.gradle << 'EOF'
+          cat > app/build.gradle << 'EOF2'
           plugins { id 'com.android.application' }
           android {
               namespace 'com.echat.app'
@@ -78,8 +78,8 @@ jobs:
                   applicationId "com.echat.app"
                   minSdk 21
                   targetSdk 34
-                  versionCode 3
-                  versionName "1.2"
+                  versionCode 4
+                  versionName "1.3"
               }
               buildTypes {
                   release { minifyEnabled false; signingConfig signingConfigs.debug }
@@ -90,9 +90,9 @@ jobs:
               }
           }
           dependencies { implementation 'androidx.appcompat:appcompat:1.6.1' }
-          EOF
+          EOF2
 
-          cat > app/src/main/AndroidManifest.xml << 'EOF'
+          cat > app/src/main/AndroidManifest.xml << 'EOF2'
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <uses-permission android:name="android.permission.INTERNET"/>
@@ -121,9 +121,9 @@ jobs:
                       android:windowSoftInputMode="adjustResize"/>
               </application>
           </manifest>
-          EOF
+          EOF2
 
-          cat > app/src/main/res/values/styles.xml << 'EOF'
+          cat > app/src/main/res/values/styles.xml << 'EOF2'
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
               <style name="SplashTheme" parent="Theme.AppCompat.NoActionBar">
@@ -132,9 +132,9 @@ jobs:
                   <item name="android:navigationBarColor">#000D1A</item>
               </style>
           </resources>
-          EOF
+          EOF2
 
-          cat > app/src/main/res/layout/activity_splash.xml << 'EOF'
+          cat > app/src/main/res/layout/activity_splash.xml << 'EOF2'
           <?xml version="1.0" encoding="utf-8"?>
           <ImageView xmlns:android="http://schemas.android.com/apk/res/android"
               android:layout_width="match_parent"
@@ -142,9 +142,9 @@ jobs:
               android:src="@drawable/splash"
               android:scaleType="fitXY"
               android:background="#000D1A"/>
-          EOF
+          EOF2
 
-          cat > app/src/main/java/com/echat/app/SplashActivity.java << 'EOF'
+          cat > app/src/main/java/com/echat/app/SplashActivity.java << 'EOF2'
           package com.echat.app;
           import android.app.Activity;
           import android.content.Intent;
@@ -161,48 +161,79 @@ jobs:
                   }, 2500);
               }
           }
-          EOF
+          EOF2
 
-          cat > app/src/main/java/com/echat/app/MainActivity.java << 'EOF'
+          cat > app/src/main/java/com/echat/app/MainActivity.java << 'EOF2'
           package com.echat.app;
           import android.annotation.SuppressLint;
           import android.app.Activity;
+          import android.content.Context;
           import android.content.Intent;
           import android.graphics.Bitmap;
+          import android.net.ConnectivityManager;
+          import android.net.NetworkInfo;
           import android.net.Uri;
           import android.os.Bundle;
+          import android.view.Gravity;
           import android.view.KeyEvent;
           import android.view.View;
+          import android.view.ViewGroup;
           import android.webkit.CookieManager;
           import android.webkit.PermissionRequest;
           import android.webkit.ValueCallback;
           import android.webkit.WebChromeClient;
+          import android.webkit.WebResourceRequest;
           import android.webkit.WebSettings;
           import android.webkit.WebView;
           import android.webkit.WebViewClient;
           import android.widget.ImageView;
+          import android.widget.LinearLayout;
           import android.widget.RelativeLayout;
+          import android.widget.TextView;
           public class MainActivity extends Activity {
               WebView webView;
               ImageView loadingView;
+              LinearLayout offlineBanner;
               ValueCallback<Uri[]> filePathCallback;
               static final int FILE_CHOOSER = 100;
+              static final String URL = "https://echat.unaux.com/app.html";
+
               @SuppressLint("SetJavaScriptEnabled")
               @Override
               protected void onCreate(Bundle savedInstanceState) {
                   super.onCreate(savedInstanceState);
                   RelativeLayout layout = new RelativeLayout(this);
-                  loadingView = new ImageView(this);
-                  loadingView.setImageResource(R.drawable.splash);
-                  loadingView.setScaleType(ImageView.ScaleType.FIT_XY);
+
+                  webView = new WebView(this);
+                  webView.setVisibility(View.INVISIBLE);
                   RelativeLayout.LayoutParams fullParams = new RelativeLayout.LayoutParams(
                       RelativeLayout.LayoutParams.MATCH_PARENT,
                       RelativeLayout.LayoutParams.MATCH_PARENT);
-                  webView = new WebView(this);
-                  webView.setVisibility(View.INVISIBLE);
                   layout.addView(webView, fullParams);
+
+                  loadingView = new ImageView(this);
+                  loadingView.setImageResource(R.drawable.splash);
+                  loadingView.setScaleType(ImageView.ScaleType.FIT_XY);
                   layout.addView(loadingView, fullParams);
+
+                  offlineBanner = new LinearLayout(this);
+                  offlineBanner.setOrientation(LinearLayout.HORIZONTAL);
+                  offlineBanner.setGravity(Gravity.CENTER);
+                  offlineBanner.setBackgroundColor(0xFFD32F2F);
+                  offlineBanner.setPadding(0, dp(6), 0, dp(6));
+                  offlineBanner.setVisibility(View.GONE);
+                  TextView offlineText = new TextView(this);
+                  offlineText.setText("No internet connection");
+                  offlineText.setTextColor(0xFFFFFFFF);
+                  offlineText.setTextSize(14);
+                  offlineBanner.addView(offlineText);
+                  RelativeLayout.LayoutParams bannerParams = new RelativeLayout.LayoutParams(
+                      RelativeLayout.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                  bannerParams.addRule(RelativeLayout.ALIGN_PARENT_TOP);
+                  layout.addView(offlineBanner, bannerParams);
+
                   setContentView(layout);
+
                   WebSettings s = webView.getSettings();
                   s.setJavaScriptEnabled(true);
                   s.setDomStorageEnabled(true);
@@ -213,10 +244,15 @@ jobs:
                   s.setLoadWithOverviewMode(true);
                   s.setBuiltInZoomControls(false);
                   s.setLoadsImagesAutomatically(true);
+                  s.setAllowFileAccess(true);
+                  s.setAllowContentAccess(true);
+
                   CookieManager.getInstance().setAcceptCookie(true);
                   CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true);
+
                   webView.setLayerType(View.LAYER_TYPE_HARDWARE, null);
                   webView.setOverScrollMode(View.OVER_SCROLL_NEVER);
+
                   webView.setWebViewClient(new WebViewClient() {
                       @Override
                       public void onPageStarted(WebView view, String url, Bitmap favicon) {
@@ -228,8 +264,18 @@ jobs:
                           loadingView.setVisibility(View.GONE);
                           webView.setVisibility(View.VISIBLE);
                           CookieManager.getInstance().flush();
+                          updateOfflineBanner();
+                      }
+                      @Override
+                      public void onReceivedError(WebView view, WebResourceRequest request, android.webkit.WebResourceError error) {
+                          if (request.isForMainFrame()) {
+                              loadingView.setVisibility(View.GONE);
+                              webView.setVisibility(View.VISIBLE);
+                              offlineBanner.setVisibility(View.VISIBLE);
+                          }
                       }
                   });
+
                   webView.setWebChromeClient(new WebChromeClient() {
                       @Override
                       public void onPermissionRequest(PermissionRequest request) {
@@ -248,8 +294,25 @@ jobs:
                           return true;
                       }
                   });
-                  webView.loadUrl("https://echat.unaux.com");
+
+                  webView.loadUrl(URL);
               }
+
+              private int dp(int v) {
+                  return (int) (v * getResources().getDisplayMetrics().density);
+              }
+
+              private boolean isNetworkAvailable() {
+                  ConnectivityManager cm = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
+                  if (cm == null) return false;
+                  NetworkInfo info = cm.getActiveNetworkInfo();
+                  return info != null && info.isConnected();
+              }
+
+              private void updateOfflineBanner() {
+                  offlineBanner.setVisibility(isNetworkAvailable() ? View.GONE : View.VISIBLE);
+              }
+
               @Override
               protected void onActivityResult(int requestCode, int resultCode, Intent data) {
                   if (requestCode == FILE_CHOOSER && filePathCallback != null) {
@@ -261,16 +324,23 @@ jobs:
                   }
                   super.onActivityResult(requestCode, resultCode, data);
               }
+
               @Override
               public boolean onKeyDown(int k, KeyEvent e) {
                   if (k == KeyEvent.KEYCODE_BACK && webView.canGoBack()) { webView.goBack(); return true; }
                   return super.onKeyDown(k, e);
               }
-              @Override protected void onResume() { super.onResume(); webView.onResume(); }
+
+              @Override
+              protected void onResume() {
+                  super.onResume();
+                  webView.onResume();
+                  updateOfflineBanner();
+              }
               @Override protected void onPause() { super.onPause(); webView.onPause(); }
               @Override protected void onDestroy() { webView.destroy(); super.onDestroy(); }
           }
-          EOF
+          EOF2
 
           gradle wrapper --gradle-version 8.4
           chmod +x gradlew
