@@ -23,6 +23,7 @@ jobs:
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
           mkdir -p app/src/main/res/drawable
+          mkdir -p app/src/main/res/drawable-night
           mkdir -p app/src/main/assets
           mkdir -p app/src/main/res/mipmap-mdpi
           mkdir -p app/src/main/res/mipmap-hdpi
@@ -34,16 +35,23 @@ jobs:
           python3 << 'PYEOF'
           from PIL import Image
           import urllib.request
+
           urllib.request.urlretrieve("https://raw.githubusercontent.com/SR-SHASHI-X/echat-app/main/logo.jpg", "logo.jpg")
           img = Image.open("logo.jpg").convert("RGBA")
           for folder, size in [("mdpi",48),("hdpi",72),("xhdpi",96),("xxhdpi",144),("xxxhdpi",192)]:
               r = img.resize((size,size), Image.LANCZOS)
               r.save(f"app/src/main/res/mipmap-{folder}/ic_launcher.png")
               r.save(f"app/src/main/res/mipmap-{folder}/ic_launcher_round.png")
-          urllib.request.urlretrieve("https://raw.githubusercontent.com/SR-SHASHI-X/echat-app/main/splash.png", "splash.png")
-          splash = Image.open("splash.png").convert("RGB")
-          splash.save("app/src/main/res/drawable/splash.jpg", "JPEG", quality=95)
-          print("Done!")
+
+          urllib.request.urlretrieve("https://raw.githubusercontent.com/SR-SHASHI-X/echat-app/main/splash.png", "splash_dark.png")
+          dark = Image.open("splash_dark.png").convert("RGB")
+          dark.save("app/src/main/res/drawable-night/splash.jpg", "JPEG", quality=95)
+
+          urllib.request.urlretrieve("https://raw.githubusercontent.com/SR-SHASHI-X/echat-app/main/splash_light.png", "splash_light.png")
+          light = Image.open("splash_light.png").convert("RGB")
+          light.save("app/src/main/res/drawable/splash.jpg", "JPEG", quality=95)
+
+          print("All images done!")
           PYEOF
 
           cat > settings.gradle << 'EOF2'
@@ -78,8 +86,8 @@ jobs:
                   applicationId "com.echat.app"
                   minSdk 21
                   targetSdk 34
-                  versionCode 5
-                  versionName "1.4"
+                  versionCode 7
+                  versionName "1.6"
               }
               buildTypes {
                   release { minifyEnabled false; signingConfig signingConfigs.debug }
@@ -128,8 +136,6 @@ jobs:
           <resources>
               <style name="SplashTheme" parent="Theme.AppCompat.NoActionBar">
                   <item name="android:windowBackground">@drawable/splash</item>
-                  <item name="android:statusBarColor">#000D1A</item>
-                  <item name="android:navigationBarColor">#000D1A</item>
               </style>
           </resources>
           EOF2
@@ -140,8 +146,7 @@ jobs:
               android:layout_width="match_parent"
               android:layout_height="match_parent"
               android:src="@drawable/splash"
-              android:scaleType="fitXY"
-              android:background="#000D1A"/>
+              android:scaleType="fitXY"/>
           EOF2
 
           cat > app/src/main/java/com/echat/app/SplashActivity.java << 'EOF2'
@@ -175,10 +180,10 @@ jobs:
           import android.net.Uri;
           import android.os.Bundle;
           import android.view.Gravity;
-          import android.view.KeyEvent;
           import android.view.View;
           import android.view.ViewGroup;
           import android.webkit.CookieManager;
+          import android.webkit.JavascriptInterface;
           import android.webkit.PermissionRequest;
           import android.webkit.ValueCallback;
           import android.webkit.WebChromeClient;
@@ -197,28 +202,25 @@ jobs:
               LinearLayout offlineBanner;
               ValueCallback<Uri[]> filePathCallback;
               static final int FILE_CHOOSER = 100;
-              static final String URL = "https://echat.unaux.com/app.html";
+              static final String HOME_URL = "https://echat.unaux.com/app.html";
               long backPressedTime = 0;
               Toast backToast;
-
-              @SuppressLint("SetJavaScriptEnabled")
+              String currentScreen = "home";
+              @SuppressLint({"SetJavaScriptEnabled","AddJavascriptInterface"})
               @Override
               protected void onCreate(Bundle savedInstanceState) {
                   super.onCreate(savedInstanceState);
                   RelativeLayout layout = new RelativeLayout(this);
-
                   webView = new WebView(this);
                   webView.setVisibility(View.INVISIBLE);
                   RelativeLayout.LayoutParams fullParams = new RelativeLayout.LayoutParams(
                       RelativeLayout.LayoutParams.MATCH_PARENT,
                       RelativeLayout.LayoutParams.MATCH_PARENT);
                   layout.addView(webView, fullParams);
-
                   loadingView = new ImageView(this);
                   loadingView.setImageResource(R.drawable.splash);
                   loadingView.setScaleType(ImageView.ScaleType.FIT_XY);
                   layout.addView(loadingView, fullParams);
-
                   offlineBanner = new LinearLayout(this);
                   offlineBanner.setOrientation(LinearLayout.HORIZONTAL);
                   offlineBanner.setGravity(Gravity.CENTER);
@@ -234,9 +236,7 @@ jobs:
                       RelativeLayout.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
                   bannerParams.addRule(RelativeLayout.ALIGN_PARENT_TOP);
                   layout.addView(offlineBanner, bannerParams);
-
                   setContentView(layout);
-
                   WebSettings s = webView.getSettings();
                   s.setJavaScriptEnabled(true);
                   s.setDomStorageEnabled(true);
@@ -249,18 +249,22 @@ jobs:
                   s.setLoadsImagesAutomatically(true);
                   s.setAllowFileAccess(true);
                   s.setAllowContentAccess(true);
-
                   CookieManager.getInstance().setAcceptCookie(true);
                   CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true);
-
                   webView.setLayerType(View.LAYER_TYPE_HARDWARE, null);
                   webView.setOverScrollMode(View.OVER_SCROLL_NEVER);
-
+                  webView.addJavascriptInterface(new Object() {
+                      @JavascriptInterface
+                      public void setScreen(String screen) {
+                          currentScreen = screen;
+                      }
+                  }, "AndroidBridge");
                   webView.setWebViewClient(new WebViewClient() {
                       @Override
                       public void onPageStarted(WebView view, String url, Bitmap favicon) {
                           loadingView.setVisibility(View.VISIBLE);
                           webView.setVisibility(View.INVISIBLE);
+                          currentScreen = "home";
                       }
                       @Override
                       public void onPageFinished(WebView view, String url) {
@@ -268,9 +272,26 @@ jobs:
                           webView.setVisibility(View.VISIBLE);
                           CookieManager.getInstance().flush();
                           updateOfflineBanner();
+                          String js =
+                              "(function(){" +
+                              "  var _orig = window.showScreen;" +
+                              "  window.showScreen = function(name){" +
+                              "    if(window.AndroidBridge) AndroidBridge.setScreen(name);" +
+                              "    return _orig.apply(this, arguments);" +
+                              "  };" +
+                              "  var _origClose = window.closeChat;" +
+                              "  if(_origClose) {" +
+                              "    window.closeChat = function(){" +
+                              "      if(window.AndroidBridge) AndroidBridge.setScreen('home');" +
+                              "      return _origClose.apply(this, arguments);" +
+                              "    };" +
+                              "  }" +
+                              "})();";
+                          view.evaluateJavascript(js, null);
                       }
                       @Override
-                      public void onReceivedError(WebView view, WebResourceRequest request, android.webkit.WebResourceError error) {
+                      public void onReceivedError(WebView view, WebResourceRequest request,
+                              android.webkit.WebResourceError error) {
                           if (request.isForMainFrame()) {
                               loadingView.setVisibility(View.GONE);
                               webView.setVisibility(View.VISIBLE);
@@ -278,7 +299,6 @@ jobs:
                           }
                       }
                   });
-
                   webView.setWebChromeClient(new WebChromeClient() {
                       @Override
                       public void onPermissionRequest(PermissionRequest request) {
@@ -286,8 +306,7 @@ jobs:
                       }
                       @Override
                       public boolean onShowFileChooser(WebView view,
-                              ValueCallback<Uri[]> callback,
-                              FileChooserParams params) {
+                              ValueCallback<Uri[]> callback, FileChooserParams params) {
                           if (filePathCallback != null) filePathCallback.onReceiveValue(null);
                           filePathCallback = callback;
                           Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
@@ -297,25 +316,20 @@ jobs:
                           return true;
                       }
                   });
-
-                  webView.loadUrl(URL);
+                  webView.loadUrl(HOME_URL);
               }
-
               private int dp(int v) {
                   return (int) (v * getResources().getDisplayMetrics().density);
               }
-
               private boolean isNetworkAvailable() {
                   ConnectivityManager cm = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
                   if (cm == null) return false;
                   NetworkInfo info = cm.getActiveNetworkInfo();
                   return info != null && info.isConnected();
               }
-
               private void updateOfflineBanner() {
                   offlineBanner.setVisibility(isNetworkAvailable() ? View.GONE : View.VISIBLE);
               }
-
               @Override
               protected void onActivityResult(int requestCode, int resultCode, Intent data) {
                   if (requestCode == FILE_CHOOSER && filePathCallback != null) {
@@ -327,28 +341,22 @@ jobs:
                   }
                   super.onActivityResult(requestCode, resultCode, data);
               }
-
               @Override
-              public boolean onKeyDown(int k, KeyEvent e) {
-                  if (k == KeyEvent.KEYCODE_BACK) {
-                      if (webView.canGoBack()) {
-                          webView.goBack();
-                          return true;
+              public void onBackPressed() {
+                  if (currentScreen.equals("chat") || currentScreen.equals("group")) {
+                      webView.evaluateJavascript("showScreen('home');", null);
+                      currentScreen = "home";
+                  } else {
+                      if (backPressedTime + 2000 > System.currentTimeMillis()) {
+                          if (backToast != null) backToast.cancel();
+                          finish();
                       } else {
-                          if (backPressedTime + 2000 > System.currentTimeMillis()) {
-                              if (backToast != null) backToast.cancel();
-                              finish();
-                          } else {
-                              backToast = Toast.makeText(this, "Press back again to exit", Toast.LENGTH_SHORT);
-                              backToast.show();
-                          }
-                          backPressedTime = System.currentTimeMillis();
-                          return true;
+                          backToast = Toast.makeText(this, "Press back again to exit", Toast.LENGTH_SHORT);
+                          backToast.show();
                       }
+                      backPressedTime = System.currentTimeMillis();
                   }
-                  return super.onKeyDown(k, e);
               }
-
               @Override
               protected void onResume() {
                   super.onResume();
