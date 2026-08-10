@@ -22,6 +22,7 @@ jobs:
           mkdir -p app/src/main/java/com/echat/app
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
+          mkdir -p app/src/main/res/values-night
           mkdir -p app/src/main/res/drawable
           mkdir -p app/src/main/res/drawable-night
           mkdir -p app/src/main/assets
@@ -86,8 +87,8 @@ jobs:
                   applicationId "com.echat.app"
                   minSdk 21
                   targetSdk 34
-                  versionCode 7
-                  versionName "1.6"
+                  versionCode 8
+                  versionName "2.0"
               }
               buildTypes {
                   release { minifyEnabled false; signingConfig signingConfigs.debug }
@@ -109,13 +110,17 @@ jobs:
               <uses-permission android:name="android.permission.RECORD_AUDIO"/>
               <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>
               <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>
+              <uses-permission android:name="android.permission.READ_MEDIA_VIDEO"/>
+              <uses-permission android:name="android.permission.VIBRATE"/>
+              <uses-permission android:name="android.permission.WAKE_LOCK"/>
               <application
                   android:label="eChat"
                   android:icon="@mipmap/ic_launcher"
                   android:roundIcon="@mipmap/ic_launcher_round"
-                  android:theme="@style/Theme.AppCompat.NoActionBar"
+                  android:theme="@style/Theme.AppCompat.DayNight.NoActionBar"
                   android:usesCleartextTraffic="true"
-                  android:hardwareAccelerated="true">
+                  android:hardwareAccelerated="true"
+                  android:largeHeap="true">
                   <activity android:name=".SplashActivity" android:exported="true"
                       android:screenOrientation="portrait"
                       android:theme="@style/SplashTheme">
@@ -126,6 +131,7 @@ jobs:
                   </activity>
                   <activity android:name=".MainActivity" android:exported="false"
                       android:screenOrientation="portrait"
+                      android:configChanges="orientation|screenSize|keyboardHidden|keyboard|navigation"
                       android:windowSoftInputMode="adjustResize"/>
               </application>
           </manifest>
@@ -134,7 +140,16 @@ jobs:
           cat > app/src/main/res/values/styles.xml << 'EOF2'
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
-              <style name="SplashTheme" parent="Theme.AppCompat.NoActionBar">
+              <style name="SplashTheme" parent="Theme.AppCompat.DayNight.NoActionBar">
+                  <item name="android:windowBackground">@drawable/splash</item>
+              </style>
+          </resources>
+          EOF2
+
+          cat > app/src/main/res/values-night/styles.xml << 'EOF2'
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <style name="SplashTheme" parent="Theme.AppCompat.DayNight.NoActionBar">
                   <item name="android:windowBackground">@drawable/splash</item>
               </style>
           </resources>
@@ -175,14 +190,18 @@ jobs:
           import android.content.Context;
           import android.content.Intent;
           import android.graphics.Bitmap;
+          import android.graphics.Color;
           import android.net.ConnectivityManager;
           import android.net.NetworkInfo;
           import android.net.Uri;
+          import android.os.Build;
           import android.os.Bundle;
           import android.view.Gravity;
           import android.view.View;
           import android.view.ViewGroup;
+          import android.view.WindowManager;
           import android.webkit.CookieManager;
+          import android.webkit.GeolocationPermissions;
           import android.webkit.JavascriptInterface;
           import android.webkit.PermissionRequest;
           import android.webkit.ValueCallback;
@@ -202,7 +221,7 @@ jobs:
               LinearLayout offlineBanner;
               ValueCallback<Uri[]> filePathCallback;
               static final int FILE_CHOOSER = 100;
-              static final String HOME_URL = "https://echat.unaux.com/app.html";
+              static final String HOME_URL = "https://echat.whf.bz/app.html";
               long backPressedTime = 0;
               Toast backToast;
               String currentScreen = "home";
@@ -210,7 +229,13 @@ jobs:
               @Override
               protected void onCreate(Bundle savedInstanceState) {
                   super.onCreate(savedInstanceState);
+                  getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                      getWindow().setStatusBarColor(Color.TRANSPARENT);
+                      getWindow().addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS);
+                  }
                   RelativeLayout layout = new RelativeLayout(this);
+                  layout.setBackgroundColor(Color.WHITE);
                   webView = new WebView(this);
                   webView.setVisibility(View.INVISIBLE);
                   RelativeLayout.LayoutParams fullParams = new RelativeLayout.LayoutParams(
@@ -225,155 +250,23 @@ jobs:
                   offlineBanner.setOrientation(LinearLayout.HORIZONTAL);
                   offlineBanner.setGravity(Gravity.CENTER);
                   offlineBanner.setBackgroundColor(0xFFD32F2F);
-                  offlineBanner.setPadding(0, dp(6), 0, dp(6));
+                  offlineBanner.setPadding(0, dp(8), 0, dp(8));
                   offlineBanner.setVisibility(View.GONE);
                   TextView offlineText = new TextView(this);
                   offlineText.setText("No internet connection");
                   offlineText.setTextColor(0xFFFFFFFF);
-                  offlineText.setTextSize(14);
+                  offlineText.setTextSize(13);
                   offlineBanner.addView(offlineText);
                   RelativeLayout.LayoutParams bannerParams = new RelativeLayout.LayoutParams(
                       RelativeLayout.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
                   bannerParams.addRule(RelativeLayout.ALIGN_PARENT_TOP);
                   layout.addView(offlineBanner, bannerParams);
                   setContentView(layout);
-                  WebSettings s = webView.getSettings();
-                  s.setJavaScriptEnabled(true);
-                  s.setDomStorageEnabled(true);
-                  s.setDatabaseEnabled(true);
-                  s.setCacheMode(WebSettings.LOAD_DEFAULT);
-                  s.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
-                  s.setUseWideViewPort(true);
-                  s.setLoadWithOverviewMode(true);
-                  s.setBuiltInZoomControls(false);
-                  s.setLoadsImagesAutomatically(true);
-                  s.setAllowFileAccess(true);
-                  s.setAllowContentAccess(true);
-                  CookieManager.getInstance().setAcceptCookie(true);
-                  CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true);
-                  webView.setLayerType(View.LAYER_TYPE_HARDWARE, null);
-                  webView.setOverScrollMode(View.OVER_SCROLL_NEVER);
+                  setupWebView();
                   webView.addJavascriptInterface(new Object() {
                       @JavascriptInterface
-                      public void setScreen(String screen) {
-                          currentScreen = screen;
-                      }
-                  }, "AndroidBridge");
-                  webView.setWebViewClient(new WebViewClient() {
-                      @Override
-                      public void onPageStarted(WebView view, String url, Bitmap favicon) {
-                          loadingView.setVisibility(View.VISIBLE);
-                          webView.setVisibility(View.INVISIBLE);
-                          currentScreen = "home";
-                      }
-                      @Override
-                      public void onPageFinished(WebView view, String url) {
-                          loadingView.setVisibility(View.GONE);
-                          webView.setVisibility(View.VISIBLE);
-                          CookieManager.getInstance().flush();
-                          updateOfflineBanner();
-                          String js =
-                              "(function(){" +
-                              "  var _orig = window.showScreen;" +
-                              "  window.showScreen = function(name){" +
-                              "    if(window.AndroidBridge) AndroidBridge.setScreen(name);" +
-                              "    return _orig.apply(this, arguments);" +
-                              "  };" +
-                              "  var _origClose = window.closeChat;" +
-                              "  if(_origClose) {" +
-                              "    window.closeChat = function(){" +
-                              "      if(window.AndroidBridge) AndroidBridge.setScreen('home');" +
-                              "      return _origClose.apply(this, arguments);" +
-                              "    };" +
-                              "  }" +
-                              "})();";
-                          view.evaluateJavascript(js, null);
-                      }
-                      @Override
-                      public void onReceivedError(WebView view, WebResourceRequest request,
-                              android.webkit.WebResourceError error) {
-                          if (request.isForMainFrame()) {
-                              loadingView.setVisibility(View.GONE);
-                              webView.setVisibility(View.VISIBLE);
-                              offlineBanner.setVisibility(View.VISIBLE);
-                          }
-                      }
-                  });
-                  webView.setWebChromeClient(new WebChromeClient() {
-                      @Override
-                      public void onPermissionRequest(PermissionRequest request) {
-                          request.grant(request.getResources());
-                      }
-                      @Override
-                      public boolean onShowFileChooser(WebView view,
-                              ValueCallback<Uri[]> callback, FileChooserParams params) {
-                          if (filePathCallback != null) filePathCallback.onReceiveValue(null);
-                          filePathCallback = callback;
-                          Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
-                          intent.addCategory(Intent.CATEGORY_OPENABLE);
-                          intent.setType("image/*");
-                          startActivityForResult(Intent.createChooser(intent, "Choose Image"), FILE_CHOOSER);
-                          return true;
-                      }
-                  });
-                  webView.loadUrl(HOME_URL);
-              }
-              private int dp(int v) {
-                  return (int) (v * getResources().getDisplayMetrics().density);
-              }
-              private boolean isNetworkAvailable() {
-                  ConnectivityManager cm = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
-                  if (cm == null) return false;
-                  NetworkInfo info = cm.getActiveNetworkInfo();
-                  return info != null && info.isConnected();
-              }
-              private void updateOfflineBanner() {
-                  offlineBanner.setVisibility(isNetworkAvailable() ? View.GONE : View.VISIBLE);
-              }
-              @Override
-              protected void onActivityResult(int requestCode, int resultCode, Intent data) {
-                  if (requestCode == FILE_CHOOSER && filePathCallback != null) {
-                      Uri[] results = null;
-                      if (resultCode == RESULT_OK && data != null && data.getData() != null)
-                          results = new Uri[]{data.getData()};
-                      filePathCallback.onReceiveValue(results);
-                      filePathCallback = null;
-                  }
-                  super.onActivityResult(requestCode, resultCode, data);
-              }
-              @Override
-              public void onBackPressed() {
-                  if (currentScreen.equals("chat") || currentScreen.equals("group")) {
-                      webView.evaluateJavascript("showScreen('home');", null);
-                      currentScreen = "home";
-                  } else {
-                      if (backPressedTime + 2000 > System.currentTimeMillis()) {
-                          if (backToast != null) backToast.cancel();
-                          finish();
-                      } else {
-                          backToast = Toast.makeText(this, "Press back again to exit", Toast.LENGTH_SHORT);
-                          backToast.show();
-                      }
-                      backPressedTime = System.currentTimeMillis();
-                  }
-              }
-              @Override
-              protected void onResume() {
-                  super.onResume();
-                  webView.onResume();
-                  updateOfflineBanner();
-              }
-              @Override protected void onPause() { super.onPause(); webView.onPause(); }
-              @Override protected void onDestroy() { webView.destroy(); super.onDestroy(); }
-          }
-          EOF2
-
-          gradle wrapper --gradle-version 8.4
-          chmod +x gradlew
-          ./gradlew assembleDebug --stacktrace
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: eChat-APK
-          path: app/build/outputs/apk/debug/app-debug.apk
-          retention-days: 30
+                      public void setScreen(String screen) { currentScreen = screen; }
+                      @JavascriptInterface
+                      public void getFcmToken() {
+                          runOnUiThread(() ->
+                              webVi
